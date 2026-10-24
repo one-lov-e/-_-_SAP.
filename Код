@@ -1,0 +1,290 @@
+// Ця функція автоматично створює меню при відкритті таблиці
+function onOpen() {  
+  var ui = SpreadsheetApp.getUi();  
+  ui.createMenu('👽 РОБОЧЕ МЕНЮ 👽')    
+    .addItem('📝 Заповнити акт', 'fillAUN') // Перша кнопка (запускає код нижче)
+    .addItem('🚀 Сформувати 47', 'processAUNs') // ДРУГА КНОПКА (запускає код з в 47.gs)
+    .addToUi();
+}  
+
+function fillAUN() {  
+  var ui = SpreadsheetApp.getUi();    
+  
+  // 1. Запитуємо номер АУН у користувача  
+  var response = ui.prompt(    
+    'Заповнення акта',    
+    'Введіть номер АУН (наприклад: 119/26/461):',    
+    ui.ButtonSet.OK_CANCEL  
+  );    
+  
+  if (response.getSelectedButton() !== ui.Button.OK) {  
+    return;  
+  }  
+  
+  var actNumber = response.getResponseText().trim();  
+  if (actNumber === "") {  
+    ui.alert("Помилка", "Номер АУН не може бути порожнім.", ui.ButtonSet.OK);  
+    return;  
+  }  
+  
+  var ss = SpreadsheetApp.getActiveSpreadsheet();  
+  var sourceSheet = ss.getSheetByName("Аркуш1");  
+  var templateSheet = ss.getSheetByName("шаблон") || ss.getSheetByName("Шаблон"); // Шукаємо шаблон
+  
+  if (!sourceSheet) {  
+    ui.alert("Помилка", "Не знайдено 'Аркуш1' з вихідними даними.", ui.ButtonSet.OK);  
+    return;  
+  }  
+
+  if (!templateSheet) {  
+    ui.alert("Помилка", "Не знайдено аркуш 'шаблон'. Будь ласка, перевірте назву аркуша-шаблону.", ui.ButtonSet.OK);  
+    return;  
+  }  
+
+  // 2. Автоматично копіюємо шаблон, якщо аркуш з таким номером ще не існує
+  var targetSheet = ss.getSheetByName(actNumber);  
+  if (!targetSheet) {  
+    targetSheet = templateSheet.copyTo(ss);  
+    targetSheet.setName(actNumber);  
+  }  
+
+  var data = sourceSheet.getDataRange().getValues();  
+  var rowsToInsert = [];  
+  var militaryUnit = "";
+
+  // 3. Збираємо дані для введеного акта з "Аркуш1"
+  for (var i = 5; i < data.length; i++) {  
+    if (data[i][15] == actNumber) { // Колонка P (індекс 15) - Номер АУН      
+      if (!militaryUnit && data[i][14]) {
+        militaryUnit = data[i][14].toString().trim();
+      }
+
+      var currentRow = 22 + rowsToInsert.length;  
+      var row = [  
+        rowsToInsert.length + 1,                // A: № з/п        
+        data[i][1] || "",                      // B: СПИСАТИ назва
+        "",                                    // C: СПИСАТИ код
+        data[i][4] || "",                      // D: СПИСАТИ од. виміру
+        data[i][9] || "",                      // E: СПИСАТИ категорія
+        data[i][3] || 0,                       // F: СПИСАТИ кількість
+        data[i][10] || 0,                      // G: СПИСАТИ ціна
+        "=F" + currentRow + "*G" + currentRow, // H: СПИСАТИ сума        
+        data[i][6] || "",                      // I: ОПРИБУТКУВАТИ назва
+        data[i][7] || "",                      // J: ОПРИБУТКУВАТИ код
+        data[i][8] || "",                      // K: ОПРИБУТКУВАТИ од. виміру
+        data[i][9] || "",                      // L: ОПРИБУТКУВАТИ категорія
+        data[i][13] || 0,                      // M: ОПРИБУТКУВАТИ кількість
+        data[i][10] || 0,                      // N: ОПРИБУТКУВАТИ ціна
+        "=M" + currentRow + "*N" + currentRow  // O: ОПРИБУТКУВАТИ сума
+      ];  
+      rowsToInsert.push(row);  
+    }  
+  }  
+  
+  if (rowsToInsert.length === 0) {  
+    ui.alert("Увага", "Не знайдено даних для акта '" + actNumber + "' на 'Аркуш1'.", ui.ButtonSet.OK);  
+    return;  
+  }  
+
+  // 4. Автоматично заповнюємо шапку документа
+  targetSheet.getRange("I16").setValue(actNumber); // Номер документа
+  
+  if (militaryUnit !== "") {
+    targetSheet.getRange("N16").setValue(militaryUnit); // Військова частина
+  }
+
+  // 5. Вставляємо рядки та записуємо табличні дані
+  var startRow = 22;  
+  targetSheet.insertRowsAfter(21, rowsToInsert.length);  
+  targetSheet.getRange(startRow, 1, rowsToInsert.length, 15).setValues(rowsToInsert);  
+  
+  // Робимо створений та заповнений аркуш активним
+  targetSheet.activate();
+  
+  // 🟢 Яскраво-зелена лінія знизу ярличка після створення акта
+  targetSheet.setTabColor("#00FF00");  
+  
+  ui.alert("Готово!", "Автоматично створено та заповнено акт '" + actNumber + "' (" + rowsToInsert.length + " рядків).", ui.ButtonSet.OK);
+}
+
+// // Ваш основний скрипт
+// function fillAUN() {  
+//   var ui = SpreadsheetApp.getUi();    
+  
+//   // 1. Запитуємо номер АУН у користувача  
+//   var response = ui.prompt(    
+//     'Заповнення акта',    
+//     'Введіть номер АУН (наприклад: 119/26/461):',    
+//     ui.ButtonSet.OK_CANCEL  
+//   );    
+  
+//   // Якщо користувач натиснув "Скасувати" або закрив вікно — зупиняємо скрипт  
+//   if (response.getSelectedButton() !== ui.Button.OK) {    
+//     return;  
+//   }    
+  
+//   var actNumber = response.getResponseText().trim();    
+//   if (actNumber === "") {    
+//     ui.alert("Помилка", "Номер АУН не може бути порожнім.", ui.ButtonSet.OK);    
+//     return;  
+//   }    
+  
+//   var ss = SpreadsheetApp.getActiveSpreadsheet();  
+//   var sourceSheet = ss.getSheetByName("Аркуш1");  
+//   var targetSheet = ss.getSheetByName(actNumber); // Шукаємо аркуш за введеним номером    
+  
+//   // Перевірки наявності аркушів  
+//   if (!sourceSheet) {    
+//     ui.alert("Помилка", "Не знайдено 'Аркуш1' з вихідними даними.", ui.ButtonSet.OK);    
+//     return;  
+//   }    
+  
+//   if (!targetSheet) {    
+//     ui.alert("Помилка", "Не знайдено аркуш з назвою '" + actNumber + "'. Будь ласка, створіть його спочатку.", ui.ButtonSet.OK);    
+//     return;  
+//   }    
+  
+//   var data = sourceSheet.getDataRange().getValues();  
+//   var rowsToInsert = [];    
+  
+//   // 2. Шукаємо дані для введеного акта на Аркуш1 (починаючи з 6-го рядка, індекс 5)  
+//   for (var i = 5; i < data.length; i++) {    
+//     if (data[i][15] == actNumber) { // Колонка P (індекс 15) - Номер АУН      
+//       var currentRow = 22 + rowsToInsert.length;      
+//       var row = [        
+//         rowsToInsert.length + 1, // A: № з/п                
+//         // --- БЛОК СПИСАТИ ---        
+//         data[i][1],  // B: СПИСАТИ назва (з колонки B)        
+//         "",          // C: СПИСАТИ код (пустий)        
+//         data[i][4],  // D: СПИСАТИ од. виміру старі (з колонки E)        
+//         data[i][9],  // E: СПИСАТИ категорія (з колонки J)        
+//         data[i][3],  // F: СПИСАТИ кількість (з колонки D)        
+//         data[i][10], // G: СПИСАТИ ціна (з колонки K)        
+//         "=F" + currentRow + "*G" + currentRow, // H: СПИСАТИ сума (формула)                
+//         // --- БЛОК ОПРИБУТКУВАТИ ---        
+//         data[i][6],  // I: ОПРИБУТКУВАТИ назва (з колонки G)        
+//         data[i][7],  // J: ОПРИБУТКУВАТИ код (з колонки H)        
+//         data[i][8],  // K: ОПРИБУТКУВАТИ од. виміру нові (з колонки I)        
+//         data[i][9],  // L: ОПРИБУТКУВАТИ категорія (з колонки J)        
+//         data[i][13], // M: ОПРИБУТКУВАТИ кількість (з колонки N)        
+//         data[i][10], // N: ОПРИБУТКУВАТИ ціна (з колонки K)        
+//         "=M" + currentRow + "*N" + currentRow  // O: ОПРИБУТКУВАТИ сума (формула)      
+//       ];      
+//       rowsToInsert.push(row);    
+//     }  
+//   }    
+  
+//   if (rowsToInsert.length === 0) {    
+//     ui.alert("Увага", "Не знайдено даних для акта '" + actNumber + "' на 'Аркуш1'.", ui.ButtonSet.OK);    
+//     return;  
+//   }    
+  
+//   // 3. Вставляємо рядки та записуємо дані  
+//   var startRow = 22;    
+  
+//   // Вставляємо нові рядки після 21-го, щоб посунути рядок "Усього" вниз  
+//   targetSheet.insertRowsAfter(startRow - 1, rowsToInsert.length);    
+  
+//   // Записуємо масив даних починаючи з 22 рядка  
+//   targetSheet.getRange(startRow, 1, rowsToInsert.length, 15).setValues(rowsToInsert);    
+  
+//   // Робимо заповнений аркуш активним (перемикаємось на нього)  
+//   targetSheet.activate();    
+  
+//   ui.alert("Готово!", "Успішно перенесено " + rowsToInsert.length + " рядків до акта '" + actNumber + "'.", ui.ButtonSet.OK);
+// }
+
+// //Затягу підрозділ військова частина при заповнені акту//
+// function fillAUN() {  
+//   var ui = SpreadsheetApp.getUi();    
+  
+//   // 1. Запитуємо номер АУН у користувача  
+//   var response = ui.prompt(    
+//     'Заповнення акта',    
+//     'Введіть номер АУН (наприклад: 119/26/461):',    
+//     ui.ButtonSet.OK_CANCEL  
+//   );    
+  
+//   if (response.getSelectedButton() !== ui.Button.OK) {    
+//     return;  
+//   }    
+  
+//   var actNumber = response.getResponseText().trim();    
+//   if (actNumber === "") {    
+//     ui.alert("Помилка", "Номер АУН не може бути порожнім.", ui.ButtonSet.OK);    
+//     return;  
+//   }    
+  
+//   var ss = SpreadsheetApp.getActiveSpreadsheet();  
+//   var sourceSheet = ss.getSheetByName("Аркуш1");  
+//   var targetSheet = ss.getSheetByName(actNumber);    
+  
+//   if (!sourceSheet) {    
+//     ui.alert("Помилка", "Не знайдено 'Аркуш1' з вихідними даними.", ui.ButtonSet.OK);    
+//     return;  
+//   }    
+  
+//   if (!targetSheet) {    
+//     ui.alert("Помилка", "Не знайдено аркуш з назвою '" + actNumber + "'. Будь ласка, створіть його спочатку.", ui.ButtonSet.OK);    
+//     return;  
+//   }    
+  
+//   var data = sourceSheet.getDataRange().getValues();  
+//   var rowsToInsert = [];    
+  
+//   // Змінна для підрозділу з колонки O
+//   var militaryUnit = "";
+
+//   // 2. Шукаємо дані для введеного акта на Аркуш1
+//   for (var i = 5; i < data.length; i++) {    
+//     if (data[i][15] == actNumber) { // Колонка P (індекс 15) - Номер АУН      
+      
+//       // Більш нічого не додаємо — беремо текст з колонки O точно так, як він записаний
+//       if (!militaryUnit && data[i][14]) {
+//         militaryUnit = data[i][14].toString().trim();
+//       }
+
+//       var currentRow = 22 + rowsToInsert.length;      
+//       var row = [        
+//         rowsToInsert.length + 1, // A: № з/п                
+//         // --- БЛОК СПИСАТИ ---        
+//         data[i][1],  // B: СПИСАТИ назва
+//         "",          // C: СПИСАТИ код
+//         data[i][4],  // D: СПИСАТИ од. виміру
+//         data[i][9],  // E: СПИСАТИ категорія
+//         data[i][3],  // F: СПИСАТИ кількість
+//         data[i][10], // G: СПИСАТИ ціна
+//         "=F" + currentRow + "*G" + currentRow, // H: СПИСАТИ сума                
+//         // --- БЛОК ОПРИБУТКУВАТИ ---        
+//         data[i][6],  // I: ОПРИБУТКУВАТИ назва
+//         data[i][7],  // J: ОПРИБУТКУВАТИ код
+//         data[i][8],  // K: ОПРИБУТКУВАТИ од. виміру
+//         data[i][9],  // L: ОПРИБУТКУВАТИ категорія
+//         data[i][13], // M: ОПРИБУТКУВАТИ кількість
+//         data[i][10], // N: ОПРИБУТКУВАТИ ціна
+//         "=M" + currentRow + "*N" + currentRow  // O: ОПРИБУТКУВАТИ сума
+//       ];      
+//       rowsToInsert.push(row);    
+//     }  
+//   }    
+  
+//   if (rowsToInsert.length === 0) {    
+//     ui.alert("Увага", "Не знайдено даних для акта '" + actNumber + "' на 'Аркуш1'.", ui.ButtonSet.OK);    
+//     return;  
+//   }    
+  
+//   // Записуємо значення з колонки O прямо у комірку N16 (під заголовок "Військова частина")
+//   if (militaryUnit !== "") {
+//     targetSheet.getRange("N16").setValue(militaryUnit);
+//   }
+
+//   // 3. Вставляємо рядки та записуємо табличні дані  
+//   var startRow = 22;    
+  
+//   targetSheet.insertRowsAfter(21, rowsToInsert.length);    
+//   targetSheet.getRange(startRow, 1, rowsToInsert.length, 15).setValues(rowsToInsert);    
+  
+//   targetSheet.activate();    
+  
+//   ui.alert("Готово!", "Успішно перенесено " + rowsToInsert.length + " рядків до акта '" + actNumber + "'.", ui.ButtonSet.OK);
+// }
