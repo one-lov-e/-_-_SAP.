@@ -1,0 +1,156 @@
+
+function processAUNs() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ui = SpreadsheetApp.getUi();
+  
+  // Запитуємо номери АУН у користувача
+  var response = ui.prompt(
+    'Обробка АУН', 
+    'Введіть номери АУН через кому (наприклад: 119/26/473, 119/26/474):', 
+    ui.ButtonSet.OK_CANCEL
+  );
+  
+  if (response.getSelectedButton() == ui.Button.OK) {
+    var input = response.getResponseText();
+    var aunList = input.split(',');
+    var targetSheet = ss.getSheetByName('Дані для 47');
+    
+    if (!targetSheet) {
+      ui.alert('Помилка: Аркуш "Дані для 47" не знайдено.');
+      return;
+    }
+    
+    var processedCount = 0;
+    var newRows = []; // Масив для зберігання всіх нових рядків перед записом
+    
+    // Проходимося по кожному введеному номеру
+    for (var i = 0; i < aunList.length; i++) {
+      var aunName = aunList[i].trim();
+      if (aunName === "") continue;
+      
+      var sourceSheet = ss.getSheetByName(aunName);
+      if (!sourceSheet) {
+        ui.alert('Увага: Аркуш з назвою "' + aunName + '" не знайдено. Його пропущено.');
+        continue;
+      }
+      
+      // // Зчитуємо загальні дані з аркуша АУН (з 16-го рядка під заголовками)
+      // var dateDoc = sourceSheet.getRange('G16').getValue(); // Дата складання
+      // var docNum = sourceSheet.getRange('I16').getValue();  // Номер документа
+      // var rawSender = sourceSheet.getRange('N16').getValue(); // Військова частина
+      // Зчитуємо загальні дані з аркуша АУН (з 16-го рядка під заголовками)
+      var headerValues = sourceSheet.getRange('G16:N16').getValues()[0];
+      var dateDoc   = headerValues[0]; // G16: Дата складання
+      var docNum    = headerValues[2]; // I16: Номер документа
+      var rawSender = headerValues[7]; // N16: Військова частина
+      
+      // Прибираємо "ВЧ А4919, " з назви військової частини
+      var senderClean = rawSender ? rawSender.toString().replace("ВЧ А4919, ", "").trim() : "";
+      
+      var lastRow = sourceSheet.getLastRow();
+      
+      // Якщо даних немає (аркуш закінчується до 21 рядка), пропускаємо
+      if (lastRow < 21) continue;
+      
+      // Зчитуємо всі дані з 21-го рядка (колонки від A до N, тобто 14 колонок)
+      var dataRange = sourceSheet.getRange(21, 1, lastRow - 20, 14);
+      var data = dataRange.getValues();
+      
+      // Проходимося по кожному рядку даних
+      for (var j = 0; j < data.length; j++) {
+        var row = data[j];
+        
+        var colA = row[0] ? row[0].toString().trim().toLowerCase() : "";
+        var colB = row[1] ? row[1].toString().trim().toLowerCase() : "";
+        
+        // 1. Зупиняємо цикл ЛИШЕ якщо дійшли до підсумків "Усього"
+        if (colB === "усього" || colA === "усього") {
+          break;
+        }
+        
+        // --- Зчитуємо дані з розділу СПИСАТИ ---
+        var nameSpysaty = row[1] ? row[1].toString().trim() : "";
+        var measureSpysaty = row[3];
+        var catSpysaty = row[4];
+        var countSpysaty = row[5];
+        var priceSpysaty = row[6];
+        
+        // --- Зчитуємо дані з розділу ОПРИБУТКУВАТИ ---
+        var nameOprybut = row[8] ? row[8].toString().trim() : "";
+        var codeOprybut = row[9];
+        var measureOprybut = row[10];
+        var catOprybut = row[11];
+        var countOprybut = row[12];
+        var priceOprybut = row[13];
+        
+        // 2. Якщо рядок порожній (немає назви ні в списанні, ні в оприбуткуванні) — ПРОПУСКАЄМО (continue)
+        if (nameSpysaty === "" && nameOprybut === "") {
+          continue;
+        }
+        
+        // Формуємо 1 рядок (Списання) - додаємо лише якщо є назва майна
+        if (nameSpysaty !== "") {
+          var row1 = [
+            9,                      // A: operationCode
+            'списання',             // B: operationType
+            dateDoc,                // C: operationDate
+            'АППО',                 // D: author
+            'АУН',                  // E: docName
+            dateDoc,                // F: docDate
+            docNum,                 // G: docNumber
+            '',                     // H: goodsType
+            '',                     // I: nomenclatureCode
+            nameSpysaty,            // J: Найменування
+            measureSpysaty,         // K: measurement
+            catSpysaty,             // L: category
+            priceSpysaty,           // M: price
+            '',                     // N: number
+            senderClean,            // O: sender
+            countSpysaty,           // P: leave
+            senderClean,            // Q: receiver
+            countSpysaty,           // R: income
+            ''                      // S: Status
+          ];
+          newRows.push(row1);
+        }
+        
+        // Формуємо 2 рядок (Оприбуткування) - додаємо лише якщо є назва майна
+        if (nameOprybut !== "") {
+          var row2 = [
+            1,                      // A: operationCode
+            'оприбуткування',       // B: operationType
+            dateDoc,                // C: operationDate
+            'АППО',                 // D: author
+            'АУН',                  // E: docName
+            dateDoc,                // F: docDate
+            docNum,                 // G: docNumber
+            '',                     // H: goodsType
+            codeOprybut,            // I: nomenclatureCode
+            nameOprybut,            // J: Найменування
+            measureOprybut,         // K: measurement
+            catOprybut,             // L: category
+            priceOprybut,           // M: price
+            '',                     // N: number
+            senderClean,            // O: sender
+            countOprybut,           // P: leave
+            senderClean,            // Q: receiver
+            countOprybut,           // R: income
+            ''                      // S: Status
+          ];
+          newRows.push(row2);
+        }
+      }
+      processedCount++;
+    }
+    
+    // Записуємо всі зібрані рядки на аркуш "Дані для 47"
+    if (newRows.length > 0) {
+      var startRow = targetSheet.getLastRow() + 1;
+      targetSheet.getRange(startRow, 1, newRows.length, newRows[0].length).setValues(newRows);
+    }
+    
+    if (processedCount > 0) {
+      ui.alert('Успіх!', 'Оброблено АУН: ' + processedCount + '.\nДодано рядків: ' + newRows.length + ' на аркуш "Дані для 47".', ui.ButtonSet.OK);
+    }
+  }
+}
